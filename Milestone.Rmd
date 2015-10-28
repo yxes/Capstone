@@ -1,0 +1,114 @@
+---
+title: "Milestone Report"
+subtitle: "<h3 style='color:#909090'>a data science capstone project</h3>"
+project: "Data Science Capstone"
+author: "Stephen D. Wells"
+affiliation: "Learning LLC"
+date: "November 14, 2014"
+output: html_document
+---
+
+Natural language generation (NLG) is a subset of natural language processing (NLP) which utilizes grammars and statistical models that have been extracted from human written texts.  SwiftKey® has built their company using these concepts to predict the next word a user types. We have been tasked with first extracting and building datasets from representative text and then modeling that text to enable us to do the same. This project is an attempt to recreate this functionality in the programming language, ‘R’.
+
+## Basic Summaries
+
+Our dataset is made up of three files.  Each file has been extracted from the various parts of the web representing very different types of language.  The colloquial nature of blog postings is in sharp contrast to the more formal structure of news reports.  However, both news and blogs are comprised of lines that contain entire paragraphs from each source whereas, twitter lines are constrained to a 140 character count.  Twitter therefore contains many more lines with far fewer word and character counts than the other two.
+
+| Filename | Line Count | | Word Count* | | Character Count | | Megabytes |
+| --------- | ---------: | :--- |---------: | :-- | ---------------: | :-- | ---: |
+| en_US.blogs.txt | 899,288 | (21%) | 37,334,690 | (37%)  | 210,160,014 | (36%) | 200 |
+| en_US.news.txt | 1,010,242 | (23%) | 34,372,720 | (34%) | 205,811,889 | (35%) | 196 |
+| en_US.twitter.txt | 2,360,148 | (55%) | 30,374,206|  (30%) | 167,105,338 | (27%) | 159 |
+| TOTAL | **4,269,678** | | **102,081,616** | | **583,077,241** | | **528** |
+<p style="font-size:12px"><sup>*</sup> word count is based on unix's wc command - R's tm package returns blogs: 29,465,729 news: 28,263,823 twitter: 23,490,398</p>
+
+### Basic Data Table with of Unique Words
+
+The following table comprises the extreme counts<sup>*</sup> of words found in one file but missing entirely in another.  Note that the process involves looking up the words as complete words and not within a word.
+
+| found in | not found |  in blogs | not found | in news | not found | in twitter | |
+| :--- | ---: | :--- | ---: | :--- | ---: | :--- |
+| en_US.blogs.txt | | --- | 1,366 | fucking | 466 | stampin |
+| en_US.news.txt |1,477 | Dimora | | --- | 1,080 | square-foot |
+| en_US.twitter.txt | 1,388 | tryna | 11,771 | fuck | | --- |
+<p style="font-size: 12px"><sup>*</sup> word count is based on results from unix's grep command. ie. "grep -iw tyrna en_US.twitter.txt | wc -l"</p>
+
+## Basic Plots
+
+```{r, echo=FALSE, message=FALSE}
+library(parallel)
+library(tm)
+library(RWeka)
+
+crps <- Corpus(DirSource("./Data/final/en_US/", encoding="UTF-8"), readerControl = list(language="en_US"))
+#crps <- Corpus(DirSource("./Data/tmp/small/", encoding="UTF-8"), readerControl = list(language="english"))
+
+library(wordcloud)
+library(SnowballC)
+library(stringi)
+
+#dat <- tm_map(crps, function(x) stri_trans_general(x, "en_US"))
+
+dat <- tm_map(crps, removeNumbers)                              # 1
+dat <- tm_map(dat, removePunctuation)                          # 2
+dat <- tm_map(dat, stripWhitespace)                           # 3
+dat <- tm_map(dat, removeWords, stopwords("english"))          # 4
+dat <- tm_map(dat, stemDocument)                               # 5
+dat <- tm_map(dat, content_transformer(tolower))               # 6
+
+#dat <- tm_map(dat, tolower) # doesn't work with wordcloud
+
+```
+
+### Histograms
+
+The histograms of word frequencies are extremely right skewed.  This is to be expected since some words are much more common than others.  The breakdown of word frequencies for each document is displayed as follows.
+
+
+```{r, echo=FALSE}
+blog.tdm <- TermDocumentMatrix(dat[1], control=list(wordLengths = c(3,10)))
+news.tdm <- TermDocumentMatrix(dat[2], control=list(wordLengths = c(3,10)))
+twit.tdm <- TermDocumentMatrix(dat[3], control=list(wordLengths = c(3,10)))
+```
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+hist(as.matrix(blog.tdm), freq=FALSE, xlab="Word Frequency", main="Blogs\nDistribution of Unique Words", col="lightgreen")
+curve(dnorm(x, mean=mean(as.matrix(blog.tdm)), sd=sd(as.matrix(blog.tdm))), add=TRUE, col="darkblue", lwd=2)
+```
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+hist(as.matrix(news.tdm), freq=FALSE, xlab="Word Frequency", main="News\nDistribution of Unique Words", col="lightgreen")
+curve(dnorm(x, mean=mean(as.matrix(news.tdm)), sd=sd(as.matrix(news.tdm))), add=TRUE, col="darkblue", lwd=2)
+```
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+hist(as.matrix(twit.tdm), freq=FALSE, xlab="Word Frequency", main="Twitter\nDistribution of Unique Words", col="lightgreen")
+curve(dnorm(x, mean=mean(as.matrix(twit.tdm)), sd=sd(as.matrix(twit.tdm))), add=TRUE, col="darkblue", lwd=2)
+```
+
+### Word Frequency Plots
+
+The variability of the language can be seen in simple word clouds comprised of each set of documents.  These clouds are composed by removing very common English articles that provide no meaningful data such as ‘the’, converting uppercase characters and then combining words into their stems.  In this way we can see the frequency of the terms used.  A quick glance clearly displays the more formal nature of the news documents compared to the twitter or blog posts.
+
+
+
+#### Blogs
+```{r, echo=FALSE, warning=FALSE}
+wordcloud(dat[3], scale=c(5, 0.5), max.words=100, random.order=F, rot.per=0.35, use.r.layout=F, colors=brewer.pal(8, "Dark2"))
+```
+
+#### News
+```{r, echo=FALSE, warning=FALSE}
+wordcloud(dat[2], scale=c(5, 0.5), max.words=100, random.order=F, rot.per=0.35, use.r.layout=F, colors=brewer.pal(8, "Dark2"))
+```
+
+#### Twitter
+```{r, echo=FALSE, warning=FALSE}
+wordcloud(dat[3], scale=c(5, 0.5), max.words=100, random.order=F, rot.per=0.35, use.r.layout=F, colors=brewer.pal(8, "Dark2"))
+```
+
+## Conclusion
+
+We have successfully demonstrated that we will need to come up with different prediction algorithms based on the application this data set is working on.  For instance, the most common trigram phrase drawn from the twitter data file is, ‘thanks for the’ whereas in both the news and blog files ‘one of the’ is the most prevalent.  To build a more accurate prediction we will need to know which type of data we are working with.
+
+I see no reason not to use the same routines in devising our predictions however we will need to establish which algorithm to use when choosing our predicted word.  For instance, seeing the word ‘Dimora’ as part of our context should result in using the news algorithm as it’s the only one with that unique word in it.  If we see the character count go beyond 140 we know we should be using the twitter algorithm.  Common words or phrases can be linked to individual data sources and therefore cause us to switch to those.  
